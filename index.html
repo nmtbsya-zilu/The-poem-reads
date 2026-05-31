@@ -169,7 +169,7 @@ _img.onload = function(){
   const libaiTex=new THREE.CanvasTexture(libaiCvs);
   window._libaiLabelMat=new THREE.SpriteMaterial({map:libaiTex,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});
   const libaiSp=new THREE.Sprite(window._libaiLabelMat);
-  libaiSp.position.set(starX-8,starY+3,starZ+2);
+  libaiSp.position.set(starX-8,starY+2,starZ+2);
   libaiSp.scale.set(5,7,1);
   scene.add(libaiSp);
   window._libaiPlane={position:new THREE.Vector3(starX,starY,starZ)};
@@ -302,6 +302,69 @@ _img2.onload = function(){
   plane2.position.set(70, -8, -35);
   scene.add(plane2);
   window._lushanPlane = plane2;
+
+  // ── 杜甫恒星（金褐色沉郁恒星）──
+  const dfX = plane2.position.x - 30, dfY = plane2.position.y - 25, dfZ = plane2.position.z - 5;
+
+  // 琥珀内核
+  const dfCoreGeo = new THREE.SphereGeometry(2, 32, 32);
+  const dfCoreMat = new THREE.ShaderMaterial({
+    vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+    fragmentShader:'precision highp float;varying vec2 vUv;uniform float uTime;void main(){float d=length(vUv-0.5);float breathe=sin(uTime*0.25)*0.25+0.65;float core=smoothstep(0.5,0.0,d)*breathe;float glow=smoothstep(0.5,0.15,d)*0.25;vec3 col=vec3(0.8,0.5,0.2)*core+vec3(0.6,0.35,0.15)*glow;gl_FragColor=vec4(col,core+glow);}',
+    uniforms:{uTime:{value:0}},
+    transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,
+  });
+  const dfCore = new THREE.Mesh(dfCoreGeo, dfCoreMat);
+  dfCore.position.set(dfX, dfY, dfZ);
+  scene.add(dfCore);
+  allU.push(dfCoreMat);
+
+  // 杜甫粒子（枯叶星尘，沉重下坠）
+  const dfPC = 300;
+  const dfPP = new Float32Array(dfPC*3);
+  const dfPB = new Float32Array(dfPC*3);
+  const dfPS = new Float32Array(dfPC);
+  const dfPH = new Float32Array(dfPC);
+  const dfPV = new Float32Array(dfPC*3);
+  for(let i=0;i<dfPC;i++){
+    const theta=Math.random()*Math.PI*2, phi=Math.acos(2*Math.random()-1);
+    const r=1.5+Math.pow(Math.random(),0.4)*4;
+    dfPB[i*3]=dfX+r*Math.sin(phi)*Math.cos(theta);
+    dfPB[i*3+1]=dfY+r*Math.sin(phi)*Math.sin(theta);
+    dfPB[i*3+2]=dfZ+r*Math.cos(phi)*0.6;
+    dfPP[i*3]=dfPB[i*3];dfPP[i*3+1]=dfPB[i*3+1];dfPP[i*3+2]=dfPB[i*3+2];
+    dfPS[i]=Math.random()*1.8+0.4;dfPH[i]=Math.random()*6.28;
+    const dx=dfPB[i*3]-dfX,dy=dfPB[i*3+1]-dfY,dz=dfPB[i*3+2]-dfZ;
+    const len=Math.sqrt(dx*dx+dy*dy+dz*dz)||1;
+    dfPV[i*3]=dx/len;dfPV[i*3+1]=dy/len;dfPV[i*3+2]=dz/len;
+  }
+  const dfGeo=new THREE.BufferGeometry();
+  dfGeo.setAttribute('position',new THREE.BufferAttribute(dfPP,3));
+  dfGeo.setAttribute('aSize',new THREE.BufferAttribute(dfPS,1));
+  dfGeo.setAttribute('aPhase',new THREE.BufferAttribute(dfPH,1));
+  window._dfParticles=new THREE.Points(dfGeo,new THREE.ShaderMaterial({
+    vertexShader:'attribute float aSize;attribute float aPhase;uniform float uTime;varying float vA;void main(){vec4 mv=modelViewMatrix*vec4(position,1.0);float sigh=pow(max(sin(uTime*0.25+aPhase*0.2),0.0),2.0);vA=sin(uTime*0.1+aPhase)*0.15+0.25+sigh*0.4;gl_PointSize=aSize*(1.0+sigh*1.2)*(160.0/-mv.z);gl_Position=projectionMatrix*mv;}',
+    fragmentShader:'precision highp float;varying float vA;void main(){float d=length(gl_PointCoord-0.5);float core=smoothstep(0.5,0.08,d);float glow=smoothstep(0.5,0.0,d)*0.3;gl_FragColor=vec4(0.75,0.45,0.2,(core+glow)*vA);}',
+    uniforms:{uTime:{value:0}},
+    transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+  }));
+  window._dfBase=dfPB;window._dfVel=dfPV;window._dfPh=dfPH;
+  scene.add(window._dfParticles);
+
+  // 杜甫文字标签
+  const dfCvs=document.createElement('canvas');dfCvs.width=80;dfCvs.height=140;
+  const dfCtx=dfCvs.getContext('2d');
+  dfCtx.fillStyle='#D4A060';dfCtx.font='44px STKaiti,KaiTi,楷体,serif';dfCtx.textAlign='center';
+  dfCtx.shadowColor='#D4A060';dfCtx.shadowBlur=18;
+  dfCtx.fillText('杜',40,50);dfCtx.fillText('甫',40,110);
+  const dfTex=new THREE.CanvasTexture(dfCvs);
+  window._dfLabelMat=new THREE.SpriteMaterial({map:dfTex,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});
+  const dfSp=new THREE.Sprite(window._dfLabelMat);
+  dfSp.position.set(dfX-10,dfY+2,dfZ+2);
+  dfSp.scale.set(5,7,1);
+  scene.add(dfSp);
+  window._dfPlane={position:new THREE.Vector3(dfX,dfY,dfZ)};
+
 
   // 庐山周围青蓝色粒子
   const lpCount = 500;
@@ -521,6 +584,34 @@ function animate() {
     if(window._libaiLabelMat){const t3=zi3?0.85:0;window._libaiLabelMat.opacity+=(t3-window._libaiLabelMat.opacity)*0.06;}
   }
 
+  
+  // 杜甫粒子动画
+  if(window._dfParticles){
+    const pp=window._dfParticles.geometry.attributes.position.array;
+    const bb=window._dfBase;const vv=window._dfVel;const ph=window._dfPh;
+    for(let i=0;i<ph.length;i++){
+      const sigh=Math.pow(Math.max(Math.sin(t*0.25+ph[i]*0.2),0.0),2.0);
+      const breathe=Math.sin(t*0.1+ph[i])*0.4+0.6;
+      const expand=sigh*2.5;
+      const fall=Math.sin(t*0.08+ph[i])*1.0;
+      pp[i*3]=bb[i*3]+vv[i*3]*(expand+fall)+Math.sin(t*0.2+ph[i])*0.8;
+      pp[i*3+1]=bb[i*3+1]+vv[i*3+1]*(expand+fall)*0.6-Math.abs(Math.sin(t*0.15+ph[i]))*0.5;
+      pp[i*3+2]=bb[i*3+2]+vv[i*3+2]*(expand+fall)*0.4;
+    }
+    window._dfParticles.geometry.attributes.position.needsUpdate=true;
+  }
+  // 杜甫标签逻辑
+  if(window._dfPlane){
+    const v4=window._dfPlane.position.clone().project(camera);
+    const sx4=(v4.x+1)/2*innerWidth,sy4=(-v4.y+1)/2*innerHeight;
+    const mdx4=window._mouseX-sx4,mdy4=window._mouseY-sy4;
+    const d4=Math.sqrt(mdx4*mdx4+mdy4*mdy4);
+    const zi4=camZ<250;
+    const ml4=document.getElementById('dufuLabel');
+    if(d4<60&&!zi4){ml4.style.left=(window._mouseX+16)+'px';ml4.style.top=(window._mouseY-12)+'px';ml4.style.opacity='1';}else{ml4.style.opacity='0';}
+    if(window._dfLabelMat){const t4=zi4?0.85:0;window._dfLabelMat.opacity+=(t4-window._dfLabelMat.opacity)*0.06;}
+  }
+
   renderer.render(scene, camera);
 }
 animate();
@@ -531,5 +622,5 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 </script>
-<div id="cityLabel">长安</div><div id="lushanLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#80E8C0;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">庐山</div><button id="fsBtn">⛶</button><script>document.getElementById("fsBtn").addEventListener("click",function(){if(!document.fullscreenElement){document.documentElement.requestFullscreen();}else{document.exitFullscreen();}});</script><div id="libaiLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#B0C8FF;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">李白</div></body>
+<div id="cityLabel">长安</div><div id="lushanLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#80E8C0;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">庐山</div><button id="fsBtn">⛶</button><script>document.getElementById("fsBtn").addEventListener("click",function(){if(!document.fullscreenElement){document.documentElement.requestFullscreen();}else{document.exitFullscreen();}});</script><div id="libaiLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#B0C8FF;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">李白</div><div id="dufuLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#D4A060;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">杜甫</div></body>
 </html>
