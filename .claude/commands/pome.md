@@ -78,16 +78,26 @@
 
 ### 标签系统
 
-**竖排文字函数** `makeLabelFn(text, color, x, y, z)`：
-- 1~3 字：竖排，canvas 80×(n×60+20)
-- 4 字以上：横排，canvas (n×50+20)×80
-- 字体：44px STKaiti/KaiTi/楷体, serif
-- THREE.Sprite 材质，AdditiveBlending
+**竖排名牌** `makeLabelFn(text, color, x, y, z)`：
+- canvas: 80 × (len×100+50)
+- 字体: bold 72px STKaiti/KaiTi/楷体, serif
+- 字符间距: y=75 + i×90
+- THREE.Sprite，`scene.add(sp)`（世界坐标，不是 plane.add）
+- 位置: 图片左侧 x-32, y+8, z+8
+- scale: (5, len×6, 1)
+- opacity: 0.75, depthTest: false
 
 **已建立标签**：
 - 所有地名标签：sprite 固定显示（opacity 0.75），HTML 标签 hover 跟随鼠标
 - 李白、杜甫：竖排 sprite（恒星旁），固定显示 + hover 跟随
 - 占位地名：同样一直可见（opacity 0.75），等有图后不变
+
+### 点击交互
+- 点击 3D 图片 → 纯 JS 动画飞到图片前方（距离 80，正前方面对），Esc 或再点击返回
+- 相机同时旋转正对目标（slerpQuaternions），确保居中
+- 支持动画中断，点击和 Esc 可随时交叉使用
+- `_locMap` 记录所有地名的 3D 坐标
+- 若图片未加载完，fallback 用射线距离检测（30 单位内即算点击）
 
 ### 图片处理
 - 已有地名：base64 内嵌，图片源文件放在 `image/` 目录
@@ -104,11 +114,14 @@
 - 图片周围 300 颗粒子 + 3 条丝带环
 
 ### 已有图片清单
-| 地名 | 图片文件 | 尺寸 |
-|------|---------|------|
-| 长安 | base64 内嵌 | 55×40 |
-| 庐山 | base64 内嵌 | 55×40 |
-| 峨眉山 | image/D72245C1-0636-4374-AADD-170A7479179E.JPG | 55×40 |
+| 地名 | 图片文件 | 尺寸 | 标签 |
+|------|---------|------|------|
+| 长安 | base64 内嵌 | 55×40 | ✓ |
+| 庐山 | base64 内嵌 | 55×40 | ✓ |
+| 峨眉山 | image/D72245C1-0636-4374-AADD-170A7479179E.JPG | 55×40 | ✓ |
+| 洛阳 | 4A86E1F6-229F-4996-A3C5-D1060E90E43B.JPG | 55×40 | ✓ |
+| 白帝城 | C36F7CE1-EAFC-4414-BE86-A2683391E36E.JPG | 55×40 | ✓ |
+| 金陵 | FE6D32F9-F09C-4227-8DD7-DC5BA187944B.PNG | 55×40 | ✓ |
 
 ### 丝带环
 - 每个地名/恒星周围 3 条
@@ -123,4 +136,7 @@
 5. 每首诗创建丝线连接到对应地名位置
 6. 新建占位地名需：计算新坐标（距所有已有地名 ≥ 120）、添加标签（一直显示）、后续等待图片替换
 7. 添加诗人标签：竖排 sprite（恒星左侧 x-8~10, y+2, z+5）
-8. 所有 uTime 在 animate 循环中手动更新
+8. **保存内核引用**：`window._xxxCore = coreMesh`
+9. **加入 _locMap**：添加诗人坐标到交互系统
+10. **加入 raycaster**：把 `window._xxxCore` 加入 planes 数组和 uuid 映射
+11. 所有 uTime 在 animate 循环中手动更新

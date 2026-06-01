@@ -129,6 +129,7 @@ _img.onload = function(){
   const coreMesh = new THREE.Mesh(coreGeo, coreMat);
   coreMesh.position.set(starX, starY, starZ);
   scene.add(coreMesh);
+  window._libaiCore = coreMesh;
   allU.push(coreMat);
 
   // 外层蓝白粒子（酒气爆发）
@@ -429,6 +430,7 @@ _img2.onload = function(){
   const dfCore = new THREE.Mesh(dfCoreGeo, dfCoreMat);
   dfCore.position.set(dfX, dfY, dfZ);
   scene.add(dfCore);
+  window._dfCore = dfCore;
   allU.push(dfCoreMat);
 
   // 杜甫粒子（枯叶星尘，沉重下坠）
@@ -1154,6 +1156,7 @@ addEventListener('resize', () => {
   var _locMap = {
     '长安': [-80, 10, 20], '庐山': [70, -8, -60], '峨眉山': [280, 130, -50],
     '洛阳': [-280, -140, -80], '白帝城': [-300, 70, -200], '金陵': [300, -70, -180],
+    '李白': [-80, -95, -15], '杜甫': [0, -78, -130],
   };
   var _saved = null, _zoomed = false, _animating = false;
   var _animFrame = null;
@@ -1186,7 +1189,7 @@ addEventListener('resize', () => {
     if (_zoomed) { _goBack(); return; }
     var ndc = new THREE.Vector2((ev.clientX/innerWidth)*2-1, -(ev.clientY/innerHeight)*2+1);
     _rc.setFromCamera(ndc, camera);
-    var planes = [window._towerPlane, window._lushanPlane, window._emeiPlane, window._luoyangPlane, window._baidiPlane, window._jinlingPlane].filter(Boolean);
+    var planes = [window._towerPlane, window._lushanPlane, window._emeiPlane, window._luoyangPlane, window._baidiPlane, window._jinlingPlane, window._libaiCore, window._dfCore].filter(Boolean);
     // 如果图片还没加载完，直接用 _locMap 位置检测
     if (planes.length === 0) {
       // 计算鼠标射线与每个地名的距离
@@ -1214,6 +1217,8 @@ addEventListener('resize', () => {
       else if(window._luoyangPlane&&uuid===window._luoyangPlane.uuid) name='洛阳';
       else if(window._baidiPlane&&uuid===window._baidiPlane.uuid) name='白帝城';
       else if(window._jinlingPlane&&uuid===window._jinlingPlane.uuid) name='金陵';
+      else if(window._libaiCore&&uuid===window._libaiCore.uuid) name='李白';
+      else if(window._dfCore&&uuid===window._dfCore.uuid) name='杜甫';
       if (!name) return;
       var pos = _locMap[name];
       if (!pos) return;
