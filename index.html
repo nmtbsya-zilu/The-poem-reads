@@ -1161,16 +1161,17 @@ addEventListener('resize', () => {
   var _saved = null, _zoomed = false, _animating = false;
   var _animFrame = null;
 
-  function _animateTo(targetCenter, targetDist, cb) {
+  function _animateTo(targetCenter, targetDist, cb, endQuat) {
     if (_animFrame) cancelAnimationFrame(_animFrame);
     _animating = true;
     var startTime = Date.now(), duration = 1500;
     var startCX = window.orbit.targetCenter.x, startCY = window.orbit.targetCenter.y, startCZ = window.orbit.targetCenter.z;
     var startDist = window.orbit.targetDist;
-    // 目标：相机从目标正前方（Z+方向）看
-    var camPos = new THREE.Vector3(targetCenter.x, targetCenter.y, targetCenter.z + targetDist);
-    var lookDir = new THREE.Vector3(0, 0, -1); // 从 +Z 方向看过来
-    var endQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), lookDir);
+    // 目标：相机从目标正前方（Z+方向）看；若传入 endQuat 则以保存的视角恢复
+    if (!endQuat) {
+      var lookDir = new THREE.Vector3(0, 0, -1);
+      endQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), lookDir);
+    }
     var startQuat = window.orbit.targetQuat.clone();
     function step() {
       var elapsed = Date.now() - startTime, t = Math.min(elapsed / duration, 1);
@@ -1199,7 +1200,7 @@ addEventListener('resize', () => {
         var pt = new THREE.Vector3(p2[0], p2[1], p2[2]);
         var dist = ray.distanceToPoint(pt);
         if (dist < 30) {
-          _saved = { cx: window.orbit.targetCenter.x, cy: window.orbit.targetCenter.y, cz: window.orbit.targetCenter.z, dist: window.orbit.targetDist };
+          _saved = { cx: window.orbit.targetCenter.x, cy: window.orbit.targetCenter.y, cz: window.orbit.targetCenter.z, dist: window.orbit.targetDist, quat: window.orbit.targetQuat.clone() };
           _zoomed = true;
           _animateTo(new THREE.Vector3(p2[0], p2[1], p2[2] + 30), 80, null);
           return;
@@ -1222,7 +1223,7 @@ addEventListener('resize', () => {
       if (!name) return;
       var pos = _locMap[name];
       if (!pos) return;
-      _saved = { cx: window.orbit.targetCenter.x, cy: window.orbit.targetCenter.y, cz: window.orbit.targetCenter.z, dist: window.orbit.targetDist };
+      _saved = { cx: window.orbit.targetCenter.x, cy: window.orbit.targetCenter.y, cz: window.orbit.targetCenter.z, dist: window.orbit.targetDist, quat: window.orbit.targetQuat.clone() };
       _zoomed = true;
       _targetName = name;
       _animateTo(new THREE.Vector3(pos[0], pos[1], pos[2] + 30), 80, null);
@@ -1236,17 +1237,17 @@ addEventListener('resize', () => {
     _animateTo(new THREE.Vector3(sv.cx, sv.cy, sv.cz), sv.dist, function() {
       document.getElementById('locOverlay').classList.remove('show');
       if (_saved === sv) _saved = null;
-    });
+    }, sv.quat);
   }
 
-  document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && (_zoomed || _saved)) _goBack(); });
+  document.addEventListener('keydown', function(e) { if (e.key === ' ' && (_zoomed || _saved)) _goBack(); });
 })();
 </script>
 <div id="cityLabel">长安</div><div id="lushanLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#80E8C0;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">庐山</div><button id="fsBtn">⛶</button><script>document.getElementById("fsBtn").addEventListener("click",function(){if(!document.fullscreenElement){document.documentElement.requestFullscreen();}else{document.exitFullscreen();}});</script><div id="libaiLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#B0C8FF;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">李白</div><div id="dufuLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#D4A060;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">杜甫</div><div id="emeiLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#B0C8FF;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">峨眉山</div>
 <div id="_luoyangLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#FF6347;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">洛阳</div>
 <div id="_baidiLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#87CEEB;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">白帝城</div>
 <div id="_jinlingLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#DAA520;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">金陵</div><div id="poem_敬亭山" style="position:fixed;pointer-events:none;font-size:20px;color:#90EE90;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">敬亭山</div><div id="poem_黄鹤楼" style="position:fixed;pointer-events:none;font-size:20px;color:#F0E68C;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">黄鹤楼</div><div id="poem_天门山" style="position:fixed;pointer-events:none;font-size:20px;color:#98FB98;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">天门山</div><div id="locOverlay"></div>
-<div id="backHint">点击空白处或按 Esc 返回宇宙</div>
+<div id="backHint">点击空白处或按空格返回宇宙</div>
 
 <script>
 // ═══════════════════════════════════════════
@@ -1382,7 +1383,7 @@ addEventListener('resize', () => {
     });
 
     document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && activeLocation) { goBack(); }
+      if (e.key === ' ' && activeLocation) { goBack(); }
     });
 
     var origSetLushan = window._setLushanPoemPos;
