@@ -1159,20 +1159,22 @@ addEventListener('resize', () => {
   var _animFrame = null;
 
   function _animateTo(targetCenter, targetDist, cb) {
-    // 停止之前动画，重新开始
     if (_animFrame) cancelAnimationFrame(_animFrame);
     _animating = true;
-    var startTime = Date.now();
-    var duration = 1500;
+    var startTime = Date.now(), duration = 1500;
     var startCX = window.orbit.targetCenter.x, startCY = window.orbit.targetCenter.y, startCZ = window.orbit.targetCenter.z;
     var startDist = window.orbit.targetDist;
+    // 目标：相机从目标正前方（Z+方向）看
+    var camPos = new THREE.Vector3(targetCenter.x, targetCenter.y, targetCenter.z + targetDist);
+    var lookDir = new THREE.Vector3(0, 0, -1); // 从 +Z 方向看过来
+    var endQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), lookDir);
+    var startQuat = window.orbit.targetQuat.clone();
     function step() {
-      var elapsed = Date.now() - startTime;
-      var t = Math.min(elapsed / duration, 1);
-      // ease-out
+      var elapsed = Date.now() - startTime, t = Math.min(elapsed / duration, 1);
       t = 1 - Math.pow(1 - t, 3);
       window.orbit.targetCenter.set(startCX + (targetCenter.x - startCX) * t, startCY + (targetCenter.y - startCY) * t, startCZ + (targetCenter.z - startCZ) * t);
       window.orbit.targetDist = startDist + (targetDist - startDist) * t;
+      window.orbit.targetQuat.slerpQuaternions(startQuat, endQuat, t);
       if (t < 1) _animFrame = requestAnimationFrame(step);
       else { _animating = false; _animFrame = null; if (cb) cb(); }
     }
