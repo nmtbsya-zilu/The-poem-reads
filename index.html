@@ -10,10 +10,16 @@
 *{margin:0;padding:0;overflow:hidden}
 body{background:#000}
 canvas{display:block}#cityLabel{position:fixed;pointer-events:none;font-size:20px;color:#ddd;font-family:"STKaiti","KaiTi","楷体",serif;opacity:0;transition:opacity 0.3s;z-index:10}
-#fsBtn{position:fixed;bottom:20px;right:20px;width:36px;height:36px;border:1px solid rgba(255,255,255,0.3);border-radius:6px;background:rgba(0,0,0,0.3);color:#fff;font-size:18px;cursor:pointer;z-index:20;display:flex;align-items:center;justify-content:center;opacity:0.5;transition:opacity 0.3s}#fsBtn:hover{opacity:1}</style>
+#fsBtn{position:fixed;bottom:20px;right:20px;width:36px;height:36px;border:1px solid rgba(255,255,255,0.3);border-radius:6px;background:rgba(0,0,0,0.3);color:#fff;font-size:18px;cursor:pointer;z-index:20;display:flex;align-items:center;justify-content:center;opacity:0.5;transition:opacity 0.3s}#fsBtn:hover{opacity:1}
+#locOverlay{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:"STKaiti","KaiTi","楷体",serif;font-size:52px;pointer-events:none;z-index:30;opacity:0;transition:opacity 0.8s;letter-spacing:0.15em;white-space:nowrap}
+#locOverlay.show{opacity:1}
+#backHint{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);font-family:"STKaiti","KaiTi","楷体",serif;font-size:14px;color:rgba(255,255,255,0.35);pointer-events:none;z-index:30;opacity:0;transition:opacity 0.6s;white-space:nowrap}
+#backHint.show{opacity:1}
+[data-loc]{cursor:pointer}[data-loc]:hover{text-shadow:0 0 14px currentColor!important;transform:scale(1.15)}</style>
 </head>
 <body>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 <script>
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 2000);
@@ -192,7 +198,7 @@ function makeLabelFn(text, color, cx, cy, cz) {
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending });
   const sp = new THREE.Sprite(mat);
   sp.position.set(cx, cy, cz);
-  sp.scale.set(isV ? 5 : cvs.width/16, isV ? cvs.height/20 : 3, 1);
+  sp.scale.set(isV ? 8 : cvs.width/12, isV ? cvs.height/15 : 4, 1);
   plane.add(sp);
   return { mat, sp };
 }
@@ -823,6 +829,7 @@ const orbit = {
   center: new THREE.Vector3(0, 0, 0),
   targetCenter: new THREE.Vector3(0, 0, 0),
 };
+window.orbit = orbit;
 
 renderer.domElement.addEventListener('mousedown', e => {
   orbit.dragging = true;
@@ -1131,6 +1138,7 @@ function animate() {
       m.opacity=0.75;
     }
   });
+  
   renderer.render(scene, camera);
 }
 animate();
@@ -1140,9 +1148,248 @@ addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
+
+// ─── 点击图片飞入（纯 JS，不依赖 GSAP）───
+(function(){
+  var _locMap = {
+    '长安': [-80, 10, 20], '庐山': [70, -8, -60], '峨眉山': [280, 130, -50],
+    '洛阳': [-280, -140, -80], '白帝城': [-300, 70, -200], '金陵': [300, -70, -180],
+  };
+  var _saved = null, _zoomed = false, _targetName = '';
+
+  function _animateTo(targetCenter, targetDist, cb) {
+    var startTime = Date.now();
+    var duration = 1500;
+    var startCX = window.orbit.targetCenter.x, startCY = window.orbit.targetCenter.y, startCZ = window.orbit.targetCenter.z;
+    var startDist = window.orbit.targetDist;
+    function step() {
+      var elapsed = Date.now() - startTime;
+      var t = Math.min(elapsed / duration, 1);
+      // ease-out
+      t = 1 - Math.pow(1 - t, 3);
+      window.orbit.targetCenter.set(startCX + (targetCenter.x - startCX) * t, startCY + (targetCenter.y - startCY) * t, startCZ + (targetCenter.z - startCZ) * t);
+      window.orbit.targetDist = startDist + (targetDist - startDist) * t;
+      if (t < 1) requestAnimationFrame(step);
+      else if (cb) cb();
+    }
+    step();
+  }
+
+  var _rc = new THREE.Raycaster();
+  renderer.domElement.addEventListener('click', function(ev) {
+    console.log('CLICK', _zoomed);
+    if (_zoomed) { _goBack(); return; }
+    var ndc = new THREE.Vector2((ev.clientX/innerWidth)*2-1, -(ev.clientY/innerHeight)*2+1);
+    _rc.setFromCamera(ndc, camera);
+    var planes = [window._towerPlane, window._lushanPlane, window._emeiPlane, window._luoyangPlane, window._baidiPlane, window._jinlingPlane].filter(Boolean);
+    // 如果图片还没加载完，直接用 _locMap 位置检测
+    if (planes.length === 0) {
+      // 计算鼠标射线与每个地名的距离
+      var ray = _rc.ray;
+      for (var k in _locMap) {
+        var p2 = _locMap[k];
+        var pt = new THREE.Vector3(p2[0], p2[1], p2[2]);
+        var dist = ray.distanceToPoint(pt);
+        if (dist < 30) {
+          _saved = { cx: window.orbit.targetCenter.x, cy: window.orbit.targetCenter.y, cz: window.orbit.targetCenter.z, dist: window.orbit.targetDist };
+          _zoomed = true;
+          _animateTo(new THREE.Vector3(p2[0], p2[1], p2[2] + 30), 80, null);
+          return;
+        }
+      }
+      return;
+    }
+    var hits = _rc.intersectObjects(planes);
+    if (hits.length > 0) {
+      var uuid = hits[0].object.uuid;
+      var name = null;
+      if(window._towerPlane&&uuid===window._towerPlane.uuid) name='长安';
+      else if(window._lushanPlane&&uuid===window._lushanPlane.uuid) name='庐山';
+      else if(window._emeiPlane&&uuid===window._emeiPlane.uuid) name='峨眉山';
+      else if(window._luoyangPlane&&uuid===window._luoyangPlane.uuid) name='洛阳';
+      else if(window._baidiPlane&&uuid===window._baidiPlane.uuid) name='白帝城';
+      else if(window._jinlingPlane&&uuid===window._jinlingPlane.uuid) name='金陵';
+      if (!name) return;
+      var pos = _locMap[name];
+      if (!pos) return;
+      _saved = { cx: window.orbit.targetCenter.x, cy: window.orbit.targetCenter.y, cz: window.orbit.targetCenter.z, dist: window.orbit.targetDist };
+      _zoomed = true;
+      _targetName = name;
+      _animateTo(new THREE.Vector3(pos[0], pos[1], pos[2] + 30), 80, null);
+    }
+  });
+
+  function _goBack() {
+    if (!_saved) return;
+    _zoomed = false;
+    _animateTo(new THREE.Vector3(_saved.cx, _saved.cy, _saved.cz), _saved.dist, function() {
+      document.getElementById('locOverlay').classList.remove('show');
+      _saved = null;
+    });
+  }
+
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && _zoomed) _goBack(); });
+})();
 </script>
 <div id="cityLabel">长安</div><div id="lushanLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#80E8C0;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">庐山</div><button id="fsBtn">⛶</button><script>document.getElementById("fsBtn").addEventListener("click",function(){if(!document.fullscreenElement){document.documentElement.requestFullscreen();}else{document.exitFullscreen();}});</script><div id="libaiLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#B0C8FF;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">李白</div><div id="dufuLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#D4A060;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">杜甫</div><div id="emeiLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#B0C8FF;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">峨眉山</div>
 <div id="_luoyangLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#FF6347;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">洛阳</div>
 <div id="_baidiLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#87CEEB;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">白帝城</div>
-<div id="_jinlingLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#DAA520;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">金陵</div></body>
+<div id="_jinlingLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#DAA520;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">金陵</div><div id="poem_敬亭山" style="position:fixed;pointer-events:none;font-size:20px;color:#90EE90;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">敬亭山</div><div id="poem_黄鹤楼" style="position:fixed;pointer-events:none;font-size:20px;color:#F0E68C;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">黄鹤楼</div><div id="poem_天门山" style="position:fixed;pointer-events:none;font-size:20px;color:#98FB98;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">天门山</div><div id="locOverlay"></div>
+<div id="backHint">点击空白处或按 Esc 返回宇宙</div>
+
+<script>
+// ═══════════════════════════════════════════
+// 地名点击 → 飞入放大交互系统
+// ═══════════════════════════════════════════
+(function(){
+  var locMap = {};
+  var savedState = null;
+  var activeLocation = null;
+  var isReady = false;
+
+  function buildMap() {
+    if (window._towerPlane) {
+      locMap['长安'] = { pos: new THREE.Vector3(-80, 10, 20), labelId: 'cityLabel', color: '#FFD700' };
+    }
+    if (window._lushanPlane) {
+      locMap['庐山'] = { pos: window._lushanPlane.position.clone(), labelId: 'lushanLabel', color: '#80E8C0' };
+    }
+    var list = [
+      { name:'白帝城', pos:[-300,70,-200], id:'_baidiLabel', color:'#87CEEB' },
+      { name:'金陵', pos:[300,-70,-180], id:'_jinlingLabel', color:'#DAA520' },
+      { name:'洛阳', pos:[-280,-140,-80], id:'_luoyangLabel', color:'#FF6347' },
+      { name:'敬亭山', pos:[150,140,-160], id:'poem_敬亭山', color:'#90EE90' },
+      { name:'峨眉山', pos:[280,130,-50], id:'emeiLabel', color:'#B0C8FF' },
+      { name:'黄鹤楼', pos:[0,-150,-60], id:'poem_黄鹤楼', color:'#F0E68C' },
+      { name:'天门山', pos:[400,-170,-240], id:'poem_天门山', color:'#98FB98' }
+    ];
+    list.forEach(function(o) {
+      locMap[o.name] = { pos: new THREE.Vector3(o.pos[0], o.pos[1], o.pos[2]), labelId: o.id, color: o.color };
+    });
+  }
+
+  function getAllLabels() {
+    var ids = ['cityLabel','lushanLabel','emeiLabel','_luoyangLabel','_baidiLabel','_jinlingLabel','poem_敬亭山','poem_黄鹤楼','poem_天门山'];
+    return ids.map(function(id) { return document.getElementById(id); }).filter(Boolean);
+  }
+
+  function flyTo(name) {
+    var loc = locMap[name];
+    if (!loc || !window.orbit) return;
+
+    savedState = {
+      center: window.orbit.targetCenter.clone(),
+      dist: window.orbit.targetDist
+    };
+    activeLocation = name;
+
+    var tc = loc.pos.clone();
+    tc.z += 20;
+
+    gsap.to(window.orbit, {
+      targetDist: 55,
+      duration: 1.8,
+      ease: 'power3.inOut',
+      overwrite: 'auto'
+    });
+    gsap.to(window.orbit.targetCenter, {
+      x: tc.x, y: tc.y, z: tc.z,
+      duration: 1.8,
+      ease: 'power3.inOut',
+      overwrite: 'auto'
+    });
+
+    var overlay = document.getElementById('locOverlay');
+    overlay.textContent = name;
+    overlay.style.color = loc.color;
+    overlay.style.textShadow = '0 0 40px ' + loc.color + ', 0 0 80px ' + loc.color;
+    overlay.classList.add('show');
+    document.getElementById('backHint').classList.add('show');
+
+    getAllLabels().forEach(function(el) { el.style.opacity = '0'; });
+  }
+  window._flyTo = flyTo;
+  window._isZoomed = function() { return !!activeLocation; };
+
+  function goBack() {
+    if (!savedState || !window.orbit) return;
+
+    gsap.to(window.orbit, {
+      targetDist: savedState.dist,
+      duration: 1.5,
+      ease: 'power2.inOut',
+      overwrite: 'auto'
+    });
+    gsap.to(window.orbit.targetCenter, {
+      x: savedState.center.x,
+      y: savedState.center.y,
+      z: savedState.center.z,
+      duration: 1.5,
+      ease: 'power2.inOut',
+      overwrite: 'auto'
+    });
+
+    document.getElementById('locOverlay').classList.remove('show');
+    document.getElementById('backHint').classList.remove('show');
+    activeLocation = null;
+    savedState = null;
+  }
+
+  function init() {
+    if (typeof gsap === 'undefined' || typeof THREE === 'undefined') {
+      setTimeout(init, 200);
+      return;
+    }
+
+    buildMap();
+
+    getAllLabels().forEach(function(el) {
+      el.style.pointerEvents = 'auto';
+      el.style.cursor = 'pointer';
+    });
+
+    document.addEventListener('click', function(e) {
+      var ids = ['cityLabel','lushanLabel','emeiLabel','_luoyangLabel','_baidiLabel','_jinlingLabel','poem_敬亭山','poem_黄鹤楼','poem_天门山'];
+      if (ids.indexOf(e.target.id) >= 0) {
+        e.stopPropagation();
+        var name = e.target.textContent.trim();
+        var idToName = { cityLabel:'长安', lushanLabel:'庐山', emeiLabel:'峨眉山', _luoyangLabel:'洛阳', _baidiLabel:'白帝城', _jinlingLabel:'金陵' };
+        name = idToName[e.target.id] || name;
+
+        if (activeLocation === name) { goBack(); }
+        else { flyTo(name); }
+      }
+    });
+
+    document.addEventListener('click', function(e) {
+      if (activeLocation) {
+        var ids = ['cityLabel','lushanLabel','emeiLabel','_luoyangLabel','_baidiLabel','_jinlingLabel','poem_敬亭山','poem_黄鹤楼','poem_天门山'];
+        if (ids.indexOf(e.target.id) < 0 && e.target.tagName !== 'BUTTON') {
+          goBack();
+        }
+      }
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && activeLocation) { goBack(); }
+    });
+
+    var origSetLushan = window._setLushanPoemPos;
+    window._setLushanPoemPos = function(pos) {
+      if (origSetLushan) origSetLushan(pos);
+      var p = pos.clone();
+      if (locMap['庐山']) { locMap['庐山'].pos = p; }
+      else { locMap['庐山'] = { pos: p, labelId: 'lushanLabel', color: '#80E8C0' }; }
+    };
+
+    isReady = true;
+  }
+
+  if (document.readyState === 'complete') init();
+  else window.addEventListener('load', init);
+  setTimeout(function() { if (!isReady) init(); }, 1000);
+})();
+</script>
+
+</body>
 </html>
