@@ -33,7 +33,7 @@
 | 金陵 | (300, -70, -180) | 占位 | 金褐 #DAA520 |
 | 洛阳 | (-280, -140, -80) | 占位 | 红色 #FF6347 |
 | 敬亭山 | (150, 140, -160) | 占位 | 浅绿 #90EE90 |
-| 峨眉山 | (280, 130, -50) | 占位 | 蓝白 #B0C8FF |
+| 峨眉山 | (280, 130, -50) | ✓ 图片 (image/) | 蓝白 #B0C8FF |
 | 黄鹤楼 | (0, -150, -60) | 占位 | 黄色 #F0E68C |
 | 天门山 | (400, -170, -240) | 占位 | 浅绿 #98FB98 |
 
@@ -85,15 +85,30 @@
 - THREE.Sprite 材质，AdditiveBlending
 
 **已建立标签**：
-- 长安、庐山：hover 显示 + 缩放固定标签
-- 李白、杜甫：竖排 sprite（恒星旁），hover + 缩放切换
-- 占位地名：一直可见（opacity 0.75），等有图后改为 hover 模式
+- 所有地名标签：sprite 固定显示（opacity 0.75），HTML 标签 hover 跟随鼠标
+- 李白、杜甫：竖排 sprite（恒星旁），固定显示 + hover 跟随
+- 占位地名：同样一直可见（opacity 0.75），等有图后不变
 
 ### 图片处理
-- 已有地名：base64 内嵌
-- 边缘羽化 shader（smoothstep 0.0~0.22）
+- 已有地名：base64 内嵌，图片源文件放在 `image/` 目录
+- 占位地名：有图片后替换为图片模式，标签从"一直显示"改为"hover + 缩放切换"，需在 `addPoemLabel` 中跳过该地名
+- 边缘羽化 shader（smoothstep 0.0~0.06）
 - 每帧 `lookAt(camera.position)` 保持正对用户
 - DoubleSide + AdditiveBlending
+- 图片周围粒子：椭球分布，距图片中心 15~35 单位，数量 300
+- 图片周围 3 条丝带环（TubeGeometry r=0.06）
+- `allU.push` 在异步回调中需用 `typeof allU !== 'undefined'` 保护
+- 粒子动画在 animate 循环中直接更新 position + uTime
+- 每帧 `lookAt(camera.position)` 保持正对用户
+- DoubleSide + AdditiveBlending
+- 图片周围 300 颗粒子 + 3 条丝带环
+
+### 已有图片清单
+| 地名 | 图片文件 | 尺寸 |
+|------|---------|------|
+| 长安 | base64 内嵌 | 55×40 |
+| 庐山 | base64 内嵌 | 55×40 |
+| 峨眉山 | image/D72245C1-0636-4374-AADD-170A7479179E.JPG | 55×40 |
 
 ### 丝带环
 - 每个地名/恒星周围 3 条
