@@ -174,134 +174,113 @@ _img.onload = function(){
   scene.add(libaiSp);
   window._libaiPlane={position:new THREE.Vector3(starX,starY,starZ)};
 
-  // ── 李白 ←→ 长安 神经气脉（两端发散，中间聚集）──
-  const planeW = 55, planeH = 40;
-  const fiberCount = 10;
-  // 从李白外围粒子中取目标点
-  const particleTargets = [];
-  const fromPoints = []; // 长安这边的分布点
-  for (let i = 0; i < fiberCount; i++) {
-    const idx = Math.floor((i / fiberCount) * spCount);
-    const pActive = window._starParticles ? window._starParticles.geometry.attributes.position.array : window._starBase;
-    particleTargets.push(new THREE.Vector3(pActive[idx*3], pActive[idx*3+1], pActive[idx*3+2]));
-    // 长安端分布在图片内部（避开羽化边缘，留 15% 边距）
-    const marginX = planeW * 0.25;
-    const marginY = planeH * 0.25;
-    const px = plane.position.x - planeW/2 + marginX + (Math.random() * (planeW - marginX*2));
-    const py = plane.position.y - planeH/2 + marginY + (Math.random() * (planeH - marginY*2));
-    fromPoints.push(new THREE.Vector3(px, py, plane.position.z));
+  
+// ── 李白诗作粒子 ←→ 地名 诗脉连接 ──
+
+function makeLabelFn(text, color, cx, cy, cz) {
+  const len = text.length;
+  const cvs = document.createElement("canvas");
+  const isV = len <= 3;
+  if (isV) { cvs.width = 80; cvs.height = len * 60 + 20; }
+  else { cvs.width = len * 50 + 20; cvs.height = 80; }
+  const ctx = cvs.getContext("2d");
+  ctx.fillStyle = color; ctx.font = "44px STKaiti,KaiTi,楷体,serif"; ctx.textAlign = "center";
+  ctx.shadowColor = color; ctx.shadowBlur = 18;
+  if (isV) { for (let i = 0; i < len; i++) ctx.fillText(text[i], 40, 50 + i * 55); }
+  else { ctx.fillText(text, cvs.width/2, 55); }
+  const tex = new THREE.CanvasTexture(cvs);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending });
+  const sp = new THREE.Sprite(mat);
+  sp.position.set(cx, cy, cz);
+  sp.scale.set(isV ? 5 : cvs.width/16, isV ? cvs.height/20 : 3, 1);
+  scene.add(sp);
+  return { mat, sp };
+}
+
+const poems = [{"name":"清平调","location":"长安","color":"#FFD700"},{"name":"月下独酌","location":"长安","color":"#FFE44D"},{"name":"长相思","location":"长安","color":"#FFCC00"},{"name":"望庐山瀑布","location":"庐山","color":"#50C878"},{"name":"庐山谣","location":"庐山","color":"#40B8A0"},{"name":"早发白帝城","location":"白帝城","color":"#87CEEB"},{"name":"登金陵凤凰台","location":"金陵","color":"#DAA520"},{"name":"将进酒","location":"洛阳","color":"#FF6347"},{"name":"独坐敬亭山","location":"敬亭山","color":"#90EE90"},{"name":"峨眉山月歌","location":"峨眉山","color":"#B0C8FF"},{"name":"黄鹤楼送孟浩然","location":"黄鹤楼","color":"#F0E68C"},{"name":"望天门山","location":"天门山","color":"#98FB98"}];
+const poemLocPositions = {
+  '长安': new THREE.Vector3(plane.position.x, plane.position.y, plane.position.z),
+  '庐山': null,
+  '白帝城': new THREE.Vector3(-300,70,-200),
+  '金陵': new THREE.Vector3(300,-70,-180),
+  '洛阳': new THREE.Vector3(-280,-140,-80),
+  '敬亭山': new THREE.Vector3(150,140,-160),
+  '峨眉山': new THREE.Vector3(280,130,-50),
+  '黄鹤楼': new THREE.Vector3(0,-150,-60),
+  '天门山': new THREE.Vector3(400,-170,-240),
+};
+window._setLushanPoemPos = function(pos) { poemLocPositions['庐山'] = pos; };
+
+// 占位地名标签 + HTML 标签
+window._poemLocations = [];
+function addPoemLabel(loc) {
+  const pos = poemLocPositions[loc];
+  if (!pos) return;
+  // 跳过长安庐山 (已有标签)
+  if (loc === '长安' || loc === '庐山') return;
+  // 颜色
+  const po = poems.find(p => p.location === loc);
+  const color = po ? po.color : '#FFFFFF';
+  const { mat } = makeLabelFn(loc, color, pos.x-12, pos.y+3, pos.z+3);
+  const htmlId = 'poem_'+loc.replace(/\s/g,'');
+  if (!document.getElementById(htmlId)) {
+    const el = document.createElement('div');
+    el.id = htmlId;
+    el.style.cssText = 'position:fixed;pointer-events:none;font-size:20px;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10;color:'+color;
+    el.textContent = loc;
+    document.body.appendChild(el);
   }
-  for (let i = 0; i < fiberCount; i++) {
-    const fromPos = fromPoints[i];
-    const toPos = particleTargets[i];
-    const dir = new THREE.Vector3().subVectors(toPos, fromPos).normalize();
-    const perpX = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
-    const perpY = new THREE.Vector3().crossVectors(dir, perpX).normalize();
+  window._poemLocations.push({ pos: pos.clone(), color, id: htmlId, sprite: mat });
+}
+poems.forEach(po => addPoemLabel(po.location));
 
-    const spread = 0.5;
-    const angle = (i / fiberCount) * Math.PI * 2;
-    const fromOff = perpX.clone().multiplyScalar(Math.cos(angle) * spread).add(perpY.clone().multiplyScalar(Math.sin(angle) * spread));
+// 创建诗脉丝线
+const poemFibers = [];
+poems.forEach((po, pi) => {
+  const locPos = poemLocPositions[po.location];
+  if (!locPos) return; // 庐山还没加载
 
-    // 神经蜿蜒路径
-    const nCtrl = 8;
-    const ctrlPts = [];
-    let ax = 0, ay = 0, az = 0;
-    for (let k = 0; k < nCtrl; k++) {
-      const tt = k / (nCtrl - 1);
-      const w = tt < 0.1 ? spread : 0.2 + Math.random() * 1.5;
-      const off = perpX.clone().multiplyScalar(Math.cos(angle) * w).add(perpY.clone().multiplyScalar(Math.sin(angle) * w));
-      ax += (Math.random() - 0.5) * 4;
-      ay += (Math.random() - 0.5) * 3;
-      az += (Math.random() - 0.5) * 2;
-      ax *= 0.8; ay *= 0.8; az *= 0.8;
-      const envelope = Math.sin(tt * Math.PI);
-      const pt = fromPos.clone().lerp(toPos, tt).add(off);
-      pt.add(perpX.clone().multiplyScalar(ax * envelope * 1.5));
-      pt.add(perpY.clone().multiplyScalar(ay * envelope * 1.2));
-      pt.add(dir.clone().multiplyScalar(az * envelope));
-      ctrlPts.push(pt);
-    }
-    const curve = new THREE.CatmullRomCurve3(ctrlPts, false, 'catmullrom', 0.2);
-
-    const geo = new THREE.TubeGeometry(curve, 120, 0.12 + Math.random()*0.08, 6, false);
-    const c = new THREE.Color('#F0F0E8');
-    const speed = 0.006 + Math.random() * 0.008;
-    const mat = new THREE.ShaderMaterial({
-      vertexShader: 'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
-      fragmentShader: 'precision highp float;varying vec2 vUv;uniform float uTime;uniform vec3 uCol;uniform float uSpd;'+NOISE+`
-      void main(){
-        float ink = fbm(vec3(vUv.x*10.0, vUv.y*5.0, uTime*0.02)) * 0.5 + 0.5;
-        float wind = sin(vUv.x*3.0 + uTime*0.15) * 0.3 + 0.7;
-        float f = fract(vUv.x - uTime * uSpd);
-        float pulse = smoothstep(0.0, 0.1, f) * smoothstep(0.35, 0.1, f);
-        float silk = pulse * 0.4 + ink * 0.4 + wind * 0.2;
-        float edgeY = smoothstep(0.0, 0.25, vUv.y) * smoothstep(1.0, 0.75, vUv.y);
-        float a = (0.03 + silk * 0.35) * edgeY * (0.6 + ink * 0.4);
-        vec3 col = uCol * (0.5 + silk * 1.5);
-        gl_FragColor = vec4(col, a);
-      }`,
-      uniforms: { uTime: { value: 0 }, uCol: { value: c }, uSpd: { value: speed } },
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    allU.push(mat);
-    scene.add(mesh);
-    // 存储纤维数据用于实时跟动
-    if (!window._nerveFibers) window._nerveFibers = [];
-    // 存储长安端在平面上的本地坐标
-    const localFrom = fromPoints[i].clone().sub(plane.position);
-    window._nerveFibers.push({
-      mesh, curve, ctrlPts,
-      particleIdx: Math.floor((i / fiberCount) * spCount),
-      localFrom,
-    });
-
-    // 沿丝线漂浮的光点
-    const dotCount = 25;
-    const dotGeo = new THREE.BufferGeometry();
-    const dotPos = new Float32Array(dotCount * 3);
-    const dotSz = new Float32Array(dotCount);
-    const dotPh = new Float32Array(dotCount);
-    for (let d = 0; d < dotCount; d++) {
-      dotPh[d] = Math.random();
-      const p = curve.getPointAt(dotPh[d]);
-      dotPos[d*3] = p.x; dotPos[d*3+1] = p.y; dotPos[d*3+2] = p.z;
-      dotSz[d] = Math.random() * 2 + 0.6;
-    }
-    dotGeo.setAttribute('position', new THREE.BufferAttribute(dotPos, 3));
-    dotGeo.setAttribute('aSize', new THREE.BufferAttribute(dotSz, 1));
-    dotGeo.setAttribute('aPhase', new THREE.BufferAttribute(dotPh, 1));
-    const dotMat = new THREE.ShaderMaterial({
-      vertexShader: 'attribute float aSize;attribute float aPhase;uniform float uTime;varying float vA;void main(){vec4 mv=modelViewMatrix*vec4(position,1.0);float twinkle=sin(uTime*1.5+aPhase*6.28)*0.3+0.5;vA=twinkle*0.6;gl_PointSize=aSize*twinkle*(150.0/-mv.z);gl_Position=projectionMatrix*mv;}',
-      fragmentShader: 'precision highp float;varying float vA;void main(){float d=length(gl_PointCoord-0.5);float a=smoothstep(0.5,0.05,d)*vA;float glow=smoothstep(0.5,0.0,d)*0.3;gl_FragColor=vec4(1.0,0.98,0.9,(a+glow)*vA*0.7);}',
-      uniforms: { uTime: { value: 0 } },
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    });
-    const dots = new THREE.Points(dotGeo, dotMat);
-    allU.push(dotMat);
-    scene.add(dots);
-    if (!window._windDots) window._windDots = [];
-    window._windDots.push({ pts: dots, curve, ph: dotPh, speed });
+  const pidx = Math.floor((pi / poems.length) * spCount);
+  const targetPos = new THREE.Vector3(spBase[pidx*3], spBase[pidx*3+1], spBase[pidx*3+2]);
+  const fromPos = locPos.clone();
+  const toPos = targetPos;
+  const dir = new THREE.Vector3().subVectors(toPos, fromPos).normalize();
+  const perpX = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+  const perpY = new THREE.Vector3().crossVectors(dir, perpX).normalize();
+  const angle = pi * 0.9;
+  const nCtrl = 6;
+  const ctrlPts = [];
+  let ax = 0, ay = 0, az = 0;
+  for (let k = 0; k < nCtrl; k++) {
+    const tt = k / (nCtrl - 1);
+    const w = tt < 0.1 ? 1.0 : 0.15 + Math.random() * 1.0;
+    const off = perpX.clone().multiplyScalar(Math.cos(angle) * w).add(perpY.clone().multiplyScalar(Math.sin(angle) * w));
+    ax += (Math.random() - 0.5) * 3; ay += (Math.random() - 0.5) * 2; az += (Math.random() - 0.5) * 1.5;
+    ax *= 0.8; ay *= 0.8; az *= 0.8;
+    const envelope = Math.sin(tt * Math.PI);
+    const pt = fromPos.clone().lerp(toPos, tt).add(off);
+    pt.add(perpX.clone().multiplyScalar(ax * envelope * 1.2));
+    pt.add(perpY.clone().multiplyScalar(ay * envelope * 1.0));
+    pt.add(dir.clone().multiplyScalar(az * envelope));
+    ctrlPts.push(pt);
   }
-
-  // 更新飘浮光点位置
-  if (!window._updateWindDots) {
-    window._updateWindDots = function(t) {
-      if (!window._windDots) return;
-      for (const wd of window._windDots) {
-        const arr = wd.pts.geometry.attributes.position.array;
-        for (let i = 0; i < wd.ph.length; i++) {
-          const pt = wd.curve.getPointAt((wd.ph[i] + t * wd.speed) % 1);
-          arr[i*3] = pt.x; arr[i*3+1] = pt.y; arr[i*3+2] = pt.z;
-        }
-        wd.pts.geometry.attributes.position.needsUpdate = true;
-      }
-    };
-  }
-
-
-
-  // 固定在图片左上角的长安（放大后显示）
+  const curve = new THREE.CatmullRomCurve3(ctrlPts, false, "catmullrom", 0.2);
+  const geo = new THREE.TubeGeometry(curve, 80, 0.08, 4, false);
+  const c = new THREE.Color(po.color);
+  const speed = 0.004 + pi * 0.003;
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: "varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}",
+    fragmentShader: "precision highp float;varying vec2 vUv;uniform float uTime;uniform vec3 uCol;uniform float uSpd;"+NOISE+"void main(){float ink=fbm(vec3(vUv.x*10.0,vUv.y*5.0,uTime*0.02))*0.5+0.5;float wind=sin(vUv.x*3.0+uTime*0.15)*0.3+0.7;float f=fract(vUv.x-uTime*uSpd);float pulse=smoothstep(0.0,0.1,f)*smoothstep(0.35,0.1,f);float silk=pulse*0.4+ink*0.4+wind*0.2;float edgeY=smoothstep(0.0,0.25,vUv.y)*smoothstep(1.0,0.75,vUv.y);float a=(0.03+silk*0.35)*edgeY*(0.6+ink*0.4);vec3 col=uCol*(0.5+silk*1.5);gl_FragColor=vec4(col,a);}",
+    uniforms: { uTime: { value: 0 }, uCol: { value: c }, uSpd: { value: speed } },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  allU.push(mat);
+  scene.add(mesh);
+  poemFibers.push({ mesh, curve, ctrlPts, fromPos, particleIdx: pidx, poem: po });
+});
+window._poemFibers = poemFibers;
+// 固定在图片左上角的长安（放大后显示）
   const labelCvs = document.createElement('canvas');
   labelCvs.width = 80; labelCvs.height = 300;
   const lctx = labelCvs.getContext('2d');
@@ -427,6 +406,7 @@ _img2.onload = function(){
   plane2.position.set(70, -8, -60);
   scene.add(plane2);
   window._lushanPlane = plane2;
+  if(window._setLushanPoemPos) window._setLushanPoemPos(new THREE.Vector3(plane2.position.x, plane2.position.y, plane2.position.z));
 
   // ── 杜甫恒星（金褐色沉郁恒星）──
   const dfX = plane2.position.x - 70, dfY = plane2.position.y - 70, dfZ = plane2.position.z - 70;
@@ -671,6 +651,39 @@ function animate() {
       f.mesh.geometry.dispose();
       f.mesh.geometry = newGeo;
     }
+  }
+  // 诗脉丝线跟动
+  if(window._poemFibers && window._starParticles) {
+    const ppActive = window._starParticles.geometry.attributes.position.array;
+    for (const f of window._poemFibers) {
+      const toPos = f.ctrlPts[f.ctrlPts.length - 1];
+      toPos.x += (ppActive[f.particleIdx*3] - toPos.x) * 0.04;
+      toPos.y += (ppActive[f.particleIdx*3+1] - toPos.y) * 0.04;
+      toPos.z += (ppActive[f.particleIdx*3+2] - toPos.z) * 0.04;
+      const newCurve = new THREE.CatmullRomCurve3(f.ctrlPts, false, "catmullrom", 0.2);
+      const newGeo = new THREE.TubeGeometry(newCurve, 60, 0.08, 4, false);
+      f.mesh.geometry.dispose();
+      f.mesh.geometry = newGeo;
+    }
+  }
+  // 诗词地名标签逻辑
+  if(window._poemLocations) {
+    window._poemLocations.forEach(pl => {
+      const v = pl.pos.clone().project(camera);
+      const sx = (v.x+1)/2*innerWidth, sy = (-v.y+1)/2*innerHeight;
+      const dx = window._mouseX-sx, dy = window._mouseY-sy;
+      const dist = Math.sqrt(dx*dx+dy*dy);
+      const zoomedIn = orbit.distance < 150;
+      const el = document.getElementById(pl.id);
+      if (el) {
+        if (dist < 60) {
+          el.style.left = (window._mouseX+16)+'px';
+          el.style.top = (window._mouseY-12)+'px';
+          el.style.opacity = '1';
+        } else { el.style.opacity = '0'; }
+      }
+      pl.sprite.opacity = 0.75;
+    });
   }
   // 地名图片始终正对相机
   if(window._towerPlane) window._towerPlane.lookAt(camera.position);
