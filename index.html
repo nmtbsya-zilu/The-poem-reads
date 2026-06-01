@@ -1155,9 +1155,13 @@ addEventListener('resize', () => {
     '长安': [-80, 10, 20], '庐山': [70, -8, -60], '峨眉山': [280, 130, -50],
     '洛阳': [-280, -140, -80], '白帝城': [-300, 70, -200], '金陵': [300, -70, -180],
   };
-  var _saved = null, _zoomed = false, _targetName = '';
+  var _saved = null, _zoomed = false, _animating = false;
+  var _animFrame = null;
 
   function _animateTo(targetCenter, targetDist, cb) {
+    // 停止之前动画，重新开始
+    if (_animFrame) cancelAnimationFrame(_animFrame);
+    _animating = true;
     var startTime = Date.now();
     var duration = 1500;
     var startCX = window.orbit.targetCenter.x, startCY = window.orbit.targetCenter.y, startCZ = window.orbit.targetCenter.z;
@@ -1169,15 +1173,14 @@ addEventListener('resize', () => {
       t = 1 - Math.pow(1 - t, 3);
       window.orbit.targetCenter.set(startCX + (targetCenter.x - startCX) * t, startCY + (targetCenter.y - startCY) * t, startCZ + (targetCenter.z - startCZ) * t);
       window.orbit.targetDist = startDist + (targetDist - startDist) * t;
-      if (t < 1) requestAnimationFrame(step);
-      else if (cb) cb();
+      if (t < 1) _animFrame = requestAnimationFrame(step);
+      else { _animating = false; _animFrame = null; if (cb) cb(); }
     }
     step();
   }
 
   var _rc = new THREE.Raycaster();
   renderer.domElement.addEventListener('click', function(ev) {
-    console.log('CLICK', _zoomed);
     if (_zoomed) { _goBack(); return; }
     var ndc = new THREE.Vector2((ev.clientX/innerWidth)*2-1, -(ev.clientY/innerHeight)*2+1);
     _rc.setFromCamera(ndc, camera);
@@ -1222,13 +1225,14 @@ addEventListener('resize', () => {
   function _goBack() {
     if (!_saved) return;
     _zoomed = false;
-    _animateTo(new THREE.Vector3(_saved.cx, _saved.cy, _saved.cz), _saved.dist, function() {
+    var sv = _saved;
+    _animateTo(new THREE.Vector3(sv.cx, sv.cy, sv.cz), sv.dist, function() {
       document.getElementById('locOverlay').classList.remove('show');
-      _saved = null;
+      if (_saved === sv) _saved = null;
     });
   }
 
-  document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && _zoomed) _goBack(); });
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && (_zoomed || _saved)) _goBack(); });
 })();
 </script>
 <div id="cityLabel">长安</div><div id="lushanLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#80E8C0;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">庐山</div><button id="fsBtn">⛶</button><script>document.getElementById("fsBtn").addEventListener("click",function(){if(!document.fullscreenElement){document.documentElement.requestFullscreen();}else{document.exitFullscreen();}});</script><div id="libaiLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#B0C8FF;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">李白</div><div id="dufuLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#D4A060;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">杜甫</div><div id="emeiLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#B0C8FF;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">峨眉山</div>
