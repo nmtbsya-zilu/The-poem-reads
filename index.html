@@ -1167,10 +1167,9 @@ addEventListener('resize', () => {
     var startTime = Date.now(), duration = 1500;
     var startCX = window.orbit.targetCenter.x, startCY = window.orbit.targetCenter.y, startCZ = window.orbit.targetCenter.z;
     var startDist = window.orbit.targetDist;
-    // 目标：相机从目标正前方（Z+方向）看；若传入 endQuat 则以保存的视角恢复
+    // 不传 endQuat = 保持视角不旋转，只平移+缩放
     if (!endQuat) {
-      var lookDir = new THREE.Vector3(0, 0, -1);
-      endQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), lookDir);
+      endQuat = window.orbit.targetQuat.clone();
     }
     var startQuat = window.orbit.targetQuat.clone();
     function step() {
@@ -1202,7 +1201,7 @@ addEventListener('resize', () => {
         if (dist < 30) {
           _saved = { cx: window.orbit.targetCenter.x, cy: window.orbit.targetCenter.y, cz: window.orbit.targetCenter.z, dist: window.orbit.targetDist, quat: window.orbit.targetQuat.clone() };
           _zoomed = true;
-          _animateTo(new THREE.Vector3(p2[0], p2[1], p2[2] + 30), 80, null);
+          _animateTo(new THREE.Vector3(p2[0], p2[1], p2[2]), 80, null);
           return;
         }
       }
@@ -1226,7 +1225,7 @@ addEventListener('resize', () => {
       _saved = { cx: window.orbit.targetCenter.x, cy: window.orbit.targetCenter.y, cz: window.orbit.targetCenter.z, dist: window.orbit.targetDist, quat: window.orbit.targetQuat.clone() };
       _zoomed = true;
       _targetName = name;
-      _animateTo(new THREE.Vector3(pos[0], pos[1], pos[2] + 30), 80, null);
+      _animateTo(new THREE.Vector3(pos[0], pos[1], pos[2]), 80, null);
     }
   });
 
@@ -1291,12 +1290,12 @@ addEventListener('resize', () => {
 
     savedState = {
       center: window.orbit.targetCenter.clone(),
-      dist: window.orbit.targetDist
+      dist: window.orbit.targetDist,
+      quat: window.orbit.targetQuat.clone()
     };
     activeLocation = name;
 
     var tc = loc.pos.clone();
-    tc.z += 20;
 
     gsap.to(window.orbit, {
       targetDist: 55,
@@ -1326,6 +1325,7 @@ addEventListener('resize', () => {
   function goBack() {
     if (!savedState || !window.orbit) return;
 
+    window.orbit.targetQuat.copy(savedState.quat);
     gsap.to(window.orbit, {
       targetDist: savedState.dist,
       duration: 1.5,
