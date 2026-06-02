@@ -15,6 +15,7 @@ canvas{display:block}#cityLabel{position:fixed;pointer-events:none;font-size:20p
 #locOverlay.show{opacity:1}
 #backHint{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);font-family:"STKaiti","KaiTi","楷体",serif;font-size:14px;color:rgba(255,255,255,0.35);pointer-events:none;z-index:30;opacity:0;transition:opacity 0.6s;white-space:nowrap}
 #backHint.show{opacity:1}
+#fiberHint{position:fixed;pointer-events:none;font-size:18px;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.2s;z-index:25;text-shadow:0 0 12px currentColor,0 0 30px currentColor;display:none}
 [data-loc]{cursor:pointer}[data-loc]:hover{text-shadow:0 0 14px currentColor!important;transform:scale(1.15)}</style>
 </head>
 <body>
@@ -1448,6 +1449,7 @@ addEventListener('resize', () => {
   }
 
   document.addEventListener('keydown', function(e) { if (e.key === ' ' && (_zoomed || _saved)) _goBack(); });
+  window._is3DZoomed = function(){ return _zoomed; };
 })();
 </script>
 <div id="cityLabel">长安</div><div id="lushanLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#80E8C0;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">庐山</div><button id="fsBtn">⛶</button><script>document.getElementById("fsBtn").addEventListener("click",function(){if(!document.fullscreenElement){document.documentElement.requestFullscreen();}else{document.exitFullscreen();}});</script><div id="libaiLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#B0C8FF;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">李白</div><div id="dufuLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#D4A060;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">杜甫</div><div id="emeiLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#B0C8FF;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">峨眉山</div>
@@ -1455,6 +1457,7 @@ addEventListener('resize', () => {
 <div id="_baidiLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#87CEEB;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">白帝城</div>
 <div id="_jinlingLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#DAA520;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">金陵</div><div id="_jtsLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#90EE90;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">敬亭山</div><div id='_huanghelouLabel' style="position:fixed;pointer-events:none;font-size:20px;color:#F0E68C;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">黄鹤楼</div><div id="_tianmenshanLabel" style="position:fixed;pointer-events:none;font-size:20px;color:#98FB98;font-family:STKaiti,KaiTi,楷体,serif;opacity:0;transition:opacity 0.3s;z-index:10">天门山</div><div id="locOverlay"></div>
 <div id="backHint">点击空白处或按空格返回宇宙</div>
+<div id="fiberHint"></div>
 
 <script>
 // ═══════════════════════════════════════════
@@ -1609,6 +1612,36 @@ addEventListener('resize', () => {
   else window.addEventListener('load', init);
   setTimeout(function() { if (!isReady) init(); }, 1000);
 })();
+
+// 诗脉丝线 hover 显示诗名（仅放大后）
+addEventListener('mousemove', function(e) {
+  var fh = document.getElementById('fiberHint');
+  if (!fh) return;
+  var zoomed = (window._is3DZoomed && window._is3DZoomed()) || (window._isZoomed && window._isZoomed());
+  if (!zoomed || !window._poemFibers) { fh.style.opacity = '0'; fh.style.display = 'none'; return; }
+  var ndc = new THREE.Vector2((e.clientX/innerWidth)*2-1, -(e.clientY/innerHeight)*2+1);
+  var rc = new THREE.Raycaster();
+  rc.setFromCamera(ndc, camera);
+  var ray = rc.ray;
+  var best = null, bestD = 4; // 3D 空间 4 单位阈值
+  for (var i = 0; i < window._poemFibers.length; i++) {
+    var f = window._poemFibers[i];
+    var curve = new THREE.CatmullRomCurve3(f.ctrlPts, false, 'catmullrom', 0.25);
+    var pts = curve.getPoints(40);
+    for (var j = 0; j < pts.length; j++) {
+      var d = ray.distanceToPoint(pts[j]);
+      if (d < bestD) { bestD = d; best = f; }
+    }
+  }
+  if (best) {
+    fh.style.display = 'block';
+    fh.textContent = best.poem.name + ' · ' + best.poem.location;
+    fh.style.color = best.poem.color;
+    fh.style.left = (e.clientX+20)+'px';
+    fh.style.top = (e.clientY-20)+'px';
+    fh.style.opacity = '1';
+  } else { fh.style.opacity = '0'; fh.style.display = 'none'; }
+});
 </script>
 
 </body>
